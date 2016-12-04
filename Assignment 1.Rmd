@@ -1,0 +1,140 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Dmitriy Yakovlev"
+date: "03-12-2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+## Loading data
+
+The training data for this project are available here:
+
+* <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+
+* <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+Both were downloaded for use in this assignment on December 3, 2016 at 21:00 GMT + 3hours.
+
+### Set seed
+
+```{r}
+set.seed(1234)
+```
+
+### Load and overview of data
+
+```{r}
+setwd("~/Downloads/04. Data Science/Session 8 Week 4/")
+training <- read.csv("pml-training.csv", na.strings = c("", "NA", "#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings = c("", "NA", "#DIV/0!"))
+```
+
+Delete columns with all missing values and are irrelevant variables:
+```{r}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+training <- training[, -c(1:7)]
+testing <- testing[, -c(1:7)]
+```
+
+```{r}
+dim(training)
+dim(testing)
+```
+The training data set contains 53 variables and 19622 obs.
+The testing data set contains 53 variables and 20 obs.
+
+```{r}
+table(training$classe)
+```
+
+## Preprocessing data
+
+In order to perform cross-validation, the training data set is partionned into 2 sets: subTraining (75%) and subTesting (25%).
+This will be performed using random subsampling without replacement.
+```{r}
+library(caret)
+
+subsets <- createDataPartition(y = training$classe, p = 0.75, list = FALSE)
+subTraining <- training[subsets, ]
+subTesting <- training[-subsets, ]
+dim(subTraining)
+dim(subTesting)
+```
+
+```{r}
+plot(subTraining$classe, col = "blue"
+    , main = "Levels of the variable classe in the subTraining data set"
+    , xlab = "Classe level"
+    , ylab = "Frequency"
+)
+```
+
+## Model Train
+
+### Model 1: Decision Tree
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+model1 <- rpart(classe ~ ., data = subTraining, method = "class")
+predict1 <- predict(model1, subTesting, type = "class")
+
+rpart.plot(model1, main = "Classification Tree", extra = 102, under = TRUE, faclen = 0)
+```
+
+```{r}
+library(e1071)
+confusionMatrix(predict1, subTesting$classe)
+```
+
+### Model 2: Random Forest
+
+```{r}
+library(randomForest)
+
+model2 <- randomForest(classe ~ . , data = subTraining, method = "class")
+predict2 <- predict(model2, subTesting, type = "class")
+
+confusionMatrix(predict2, subTesting$classe)
+```
+
+### Choosing model
+
+As expected, Random Forest algorithm performed better than Decision Trees.
+Accuracy for Random Forest model was 0.995 (95% CI: (0.9927, 0.9969)) compared to 0.7384 (95% CI: (0.7258, 0.7506)) for Decision Tree model. The random **Forest model** is choosen.
+
+## Test set prediction
+
+```{r}
+predictfinal <- predict(model2, testing, type = "class")
+predictfinal
+
+plot(predictfinal)
+```
+
+Write files for submission (using Coursera provided code):
+
+```{r}
+pml_write_files = function(x) {
+  n = length(x)
+  for(i in 1:n) {
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+
+pml_write_files(predictfinal)
+```
+
